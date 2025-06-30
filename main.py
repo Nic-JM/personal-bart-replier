@@ -99,7 +99,7 @@ def main():
     lowest_loss = float("inf")
     epoch_without_improvement = 0
 
-    for epoch in range(20):
+    for epoch in range(25):
         model.train()
         total_loss = 0
 
