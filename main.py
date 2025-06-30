@@ -45,6 +45,8 @@ def preprocess_data(data,  tokenizer):
     enc_data = []
 
     for input, output in data:
+        input = str(input)
+        output = str(output)
         input_enc, output_enc = tokenize_data(tokenizer, input, output, max_length)
         labels = output_enc["input_ids"]
         labels[labels == tokenizer.pad_token_id] = -100 #pytorch crossentrpy ignores
@@ -66,7 +68,6 @@ def print_loss_graph(loss_history, lowest_loss, loss_threshold):
     plt.title("Training Loss Curve")
     plt.grid(True)
     plt.savefig("loss_graph.pdf", format="pdf") 
-    
 
 def main():
     loss_history = []
