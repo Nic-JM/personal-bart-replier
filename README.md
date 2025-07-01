@@ -1,6 +1,6 @@
 # BART Conversation Clone
 
-This project fine-tunes Facebook's `bart-base` model to generate personalized responses based on your past message-reply pairs.
+This projects files aim to fine-tunes Facebook's `bart-base` model to generate personalized responses based on your past message-reply pairs.
 
 ## Features
 - cleans meta data scraped from WhatsApp web
