@@ -99,7 +99,7 @@ def main():
     lowest_loss = float("inf")
     epoch_without_improvement = 0
 
-    for epoch in range(25):
+    for epoch in range(100):
         model.train()
         total_loss = 0
 
@@ -120,7 +120,7 @@ def main():
         loss_history.append(avg_loss)
 
         # Store the models
-        models.add(epoch + 1, model, avg_loss)
+        models.add(epoch + 1, model.state_dict(), avg_loss)
 
         # Print loss update
         print(f"Epoch {epoch+1} | Avg Loss: {avg_loss:.4f}")
@@ -136,10 +136,11 @@ def main():
             break
 
 
-    best_epoch, best_model, best_loss = models.return_best_model()
+    best_epoch, best_model_state, best_loss = models.return_best_model()
     print_loss_graph(loss_history, lowest_loss, loss_threshold)
     print(f"The model found in {best_epoch[:-1]} {best_epoch[-1]} has the best loss of {best_loss}")
-    torch.save(best_model, "best_bart_model.pt")
+    torch.save(best_model_state, "best_bart_weights.pt")
+
 
 
 if __name__== '__main__':

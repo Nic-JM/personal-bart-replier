@@ -6,11 +6,11 @@ class ModelSelector:
         self.threshold = threshold
         self.lowest_loss = float("inf")
 
-    def add(self, epoch, model, loss):
+    def add(self, epoch, model_state, loss):
         key = f"epoch{epoch}"
 
         self.models[key] = {
-            "model": model,
+            "model": model_state,
             "loss": loss
         }
 
