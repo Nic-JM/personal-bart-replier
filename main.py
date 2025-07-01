@@ -110,6 +110,7 @@ def main():
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
+            model.zero_grad()
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -138,7 +139,8 @@ def main():
 
     best_epoch, best_model_state, best_loss = models.return_best_model()
     print_loss_graph(loss_history, lowest_loss, loss_threshold)
-    print(f"The model found in {best_epoch[:-1]} {best_epoch[-1]} has the best loss of {best_loss}")
+
+    print(f"The best model was from {best_epoch} with loss {best_loss:.4f}")
     torch.save(best_model_state, "best_bart_weights.pt")
 
 
