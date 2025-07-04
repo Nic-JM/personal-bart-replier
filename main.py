@@ -179,8 +179,6 @@ def main():
         avg_test_loss = test_loss / len(testing_data)
         test_loss_history.append(avg_test_loss)
 
-
-
         # Store the models
         if avg_test_loss < lowest_test_loss:
             lowest_test_loss = avg_test_loss
@@ -194,7 +192,6 @@ def main():
 
         # Print loss update
         print(f"Epoch {epoch+1} | Avg Training Loss: {avg_loss:.4f} | Avg Test Loss: {avg_test_loss:.4f}")
-
         
         if avg_loss < lowest_loss:
             lowest_loss = avg_loss
@@ -205,13 +202,11 @@ def main():
         if epoch_without_improvement > 5:
             break
 
-
     best_epoch, best_model_state, best_test_loss = models.return_best_model()
     print_loss_graph(loss_history, test_loss_history)
 
     print(f"Saved the model from {best_epoch} with a test loss {best_test_loss:.4f}")
     torch.save(best_model_state, "best_bart_weights.pt")
-
 
 if __name__== '__main__':
     main()
