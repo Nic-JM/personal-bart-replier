@@ -71,20 +71,34 @@ def preprocess_data(data,  tokenizer):
 
     return enc_data
     
-def print_loss_graph(loss_history, lowest_loss, loss_threshold, title):
-    loss_cutoff = lowest_loss * (1 + loss_threshold)
-    plt.axhline(y = loss_cutoff, color="red")
-    plt.plot(range(1, len(loss_history) + 1),loss_history)
+def print_loss_graph(train_loss_history, test_loss_history):
+
+    plt_axis = range(1, len(train_loss_history) + 1)
+
+    min_train_loss_epoch = np.argmin(train_loss_history) + 1
+    min_train_loss = min(train_loss_history)
+
+    min_test_loss_epoch = np.argmin(test_loss_history) + 1
+    min_test_loss = min(test_loss_history)
+
+    plt.plot(plt_axis, train_loss_history, label = "Training Loss", color = "blue")
+    plt.plot(plt_axis, test_loss_history, label = "Test Loss", color = "orange")
+
+    plt.scatter(min_train_loss_epoch, min_train_loss, color = "black", marker = 'o')
+    plt.scatter(min_test_loss_epoch, min_test_loss, color = "black", marker='o')
+
     plt.xlabel("Epoch")
     plt.ylabel("Average Loss")
-    plt.title(f"{title} Loss Curve")
+    plt.title("Test and Train Loss Curve")
     plt.grid(True)
-    plt.savefig(f"{title}_loss_graph.pdf", format="pdf") 
+    plt.legend()
+    plt.savefig("Test_Train_loss_graph.pdf", format="pdf")
+    plt.close()
 
 def main():
     loss_history = []
     test_loss_history = []
-    loss_threshold = 0.1
+    loss_threshold = 0.0 # I want the lowest test loss
     models = ModelSelector(loss_threshold)
 
     #read in data
@@ -131,7 +145,6 @@ def main():
     for epoch in range(100):
         model.train()
         total_training_loss = 0
-        total_test_loss = 0
 
         # Train the model
         for batch in training_data:
@@ -194,12 +207,10 @@ def main():
 
 
     best_epoch, best_model_state, best_test_loss = models.return_best_model()
-    print_loss_graph(loss_history, lowest_loss, loss_threshold, "Training")
-    print_loss_graph(test_loss_history, lowest_test_loss, loss_threshold, "Test")
+    print_loss_graph(loss_history, test_loss_history)
 
     print(f"Saved the model from {best_epoch} with a test loss {best_test_loss:.4f}")
     torch.save(best_model_state, "best_bart_weights.pt")
-
 
 
 if __name__== '__main__':
