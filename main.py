@@ -8,6 +8,7 @@ import torch.optim as optim
 import torch
 from model_selector import ModelSelector
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 
 def determine_max_length(data):
     sample_matrix = random.sample(data, 3)
@@ -26,6 +27,17 @@ def determine_max_length(data):
 
     # Since the number of tokens for a sentence are on average more than the number of words
     return int(upper_limit * 1.2)
+
+def classify_message_length(message):
+    message = str(message)
+    length = len(message.split())
+
+    if length < 3:
+        return 0
+    elif length >=3 and length < 9:
+        return 1
+    else:
+        return 2
 
 def tokenize_data(tokenizer, input, output, max_length):
     input_enc = tokenizer(input, max_length = max_length,
@@ -59,72 +71,116 @@ def preprocess_data(data,  tokenizer):
 
     return enc_data
     
-def print_loss_graph(loss_history, lowest_loss, loss_threshold):
+def print_loss_graph(loss_history, lowest_loss, loss_threshold, title):
     loss_cutoff = lowest_loss * (1 + loss_threshold)
     plt.axhline(y = loss_cutoff, color="red")
     plt.plot(range(1, len(loss_history) + 1),loss_history)
     plt.xlabel("Epoch")
     plt.ylabel("Average Loss")
-    plt.title("Training Loss Curve")
+    plt.title(f"{title} Loss Curve")
     plt.grid(True)
-    plt.savefig("loss_graph.pdf", format="pdf") 
+    plt.savefig(f"{title}_loss_graph.pdf", format="pdf") 
 
 def main():
     loss_history = []
-    loss_threshold = 0.5
+    test_loss_history = []
+    loss_threshold = 0.1
     models = ModelSelector(loss_threshold)
-
-    #test inputs
-    inputs = ["Hi there!", "How are you?", "What's up?"]
-    outputs = ["Hey!", "I'm fine, thanks.", "Not much, you?"]
-    data = []
-    for i in range(3):
-        data.append([inputs[i], outputs[i]])
 
     #read in data
     df = pd.read_csv("message_reply_pairs.csv")
     data = df.values.tolist()
-    
+
+    X = [row[1] for row in data]
+    y = [row[0] for row in data]
+    strat_condition = [classify_message_length(row[1]) for row in data]
+
+    # Train 90% | Test 10%
+    train_input, train_output, test_input, test_output = train_test_split(X, y, 
+                                                                          test_size=0.1, 
+                                                                          random_state=42,
+                                                                          stratify=strat_condition)
+
+
+    train_dataset = list(zip(train_input, train_output))
+    test_dataset = list(zip(test_input, test_output))
+
     # convert the input and output array into tokenized tensors
     tokeniser = BartTokenizer.from_pretrained('facebook/bart-base')
     model = BartForConditionalGeneration.from_pretrained("facebook/bart-base")
 
-    processed_data = preprocess_data(data, tokeniser)
-    dataset = EncodedData(processed_data)
-    dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+    processed_train_data = preprocess_data(train_dataset, tokeniser)
+    processed_test_data = preprocess_data(test_dataset, tokeniser)
+
+    ## load training data
+    train_dataset = EncodedData(processed_train_data)
+    training_data = DataLoader(train_dataset, batch_size=8, shuffle=True)
+
+    ## Load test data
+    test_dataset = EncodedData(processed_test_data)
+    testing_data = DataLoader(test_dataset, batch_size=8, shuffle=False)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-
     optimizer = optim.AdamW(model.parameters(), lr=(5e-5))
     lowest_loss = float("inf")
+    lowest_test_loss = float("inf")
     epoch_without_improvement = 0
+    epoch_without_test_improvement = 0
 
     for epoch in range(100):
         model.train()
-        total_loss = 0
+        total_training_loss = 0
+        total_test_loss = 0
 
-        for batch in dataloader:
+        # Train the model
+        for batch in training_data:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
-            model.zero_grad()
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
 
-            total_loss += loss.item()
+            total_training_loss += loss.item()
 
-        avg_loss = total_loss / len(dataloader)
+        avg_loss = total_training_loss / len(training_data)
         loss_history.append(avg_loss)
 
+        ### Test the models results ###
+        model.eval()
+        test_loss = 0
+        with torch.no_grad():
+            for batch in testing_data:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                labels = batch["labels"].to(device)
+
+                output = model(input_ids = input_ids, attention_mask = attention_mask, labels = labels)
+                loss = output.loss
+                test_loss += loss.item()
+        
+        avg_test_loss = test_loss / len(testing_data)
+        test_loss_history.append(avg_test_loss)
+
+
+
         # Store the models
-        models.add(epoch + 1, model.state_dict(), avg_loss)
+        if avg_test_loss < lowest_test_loss:
+            lowest_test_loss = avg_test_loss
+            epoch_without_test_improvement = 0
+        else:
+            epoch_without_test_improvement += 1
+
+        if epoch_without_test_improvement <= 5:
+            # Only save models that are improving on previous results
+            models.add(epoch + 1, model.state_dict(), avg_test_loss)
 
         # Print loss update
-        print(f"Epoch {epoch+1} | Avg Loss: {avg_loss:.4f}")
+        print(f"Epoch {epoch+1} | Avg Training Loss: {avg_loss:.4f} | Avg Test Loss: {avg_test_loss:.4f}")
 
         
         if avg_loss < lowest_loss:
@@ -133,14 +189,15 @@ def main():
         else:
             epoch_without_improvement += 1
         
-        if epoch_without_improvement > 4:
+        if epoch_without_improvement > 5:
             break
 
 
-    best_epoch, best_model_state, best_loss = models.return_best_model()
-    print_loss_graph(loss_history, lowest_loss, loss_threshold)
+    best_epoch, best_model_state, best_test_loss = models.return_best_model()
+    print_loss_graph(loss_history, lowest_loss, loss_threshold, "Training")
+    print_loss_graph(test_loss_history, lowest_test_loss, loss_threshold, "Test")
 
-    print(f"The best model was from {best_epoch} with loss {best_loss:.4f}")
+    print(f"Saved the model from {best_epoch} with a test loss {best_test_loss:.4f}")
     torch.save(best_model_state, "best_bart_weights.pt")
 
 
